@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Key, User } from "lucide-react";
+import { Key, User, Users, Building2 } from "lucide-react";
 
 export default function SettingsPage() {
   return (
@@ -12,6 +12,36 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-3">
+        <Link
+          href="/settings/team"
+          className="flex items-center gap-4 bg-surface rounded-xl border border-border p-4 hover:border-border-hover transition-colors"
+        >
+          <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
+            <Users className="w-5 h-5 text-success" />
+          </div>
+          <div>
+            <p className="font-medium text-sm">Team</p>
+            <p className="text-text-muted text-xs mt-0.5">
+              Invite members and manage roles
+            </p>
+          </div>
+        </Link>
+
+        <Link
+          href="/settings/organization"
+          className="flex items-center gap-4 bg-surface rounded-xl border border-border p-4 hover:border-border-hover transition-colors"
+        >
+          <div className="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
+            <Building2 className="w-5 h-5 text-warning" />
+          </div>
+          <div>
+            <p className="font-medium text-sm">Organization</p>
+            <p className="text-text-muted text-xs mt-0.5">
+              Create or manage your organization
+            </p>
+          </div>
+        </Link>
+
         <Link
           href="/settings/api-keys"
           className="flex items-center gap-4 bg-surface rounded-xl border border-border p-4 hover:border-border-hover transition-colors"

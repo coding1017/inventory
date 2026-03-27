@@ -289,6 +289,84 @@ export type Database = {
         };
         Relationships: [];
       };
+      inv_organizations: {
+        Row: {
+          id: string;
+          name: string;
+          slug: string;
+          owner_id: string;
+          logo_url: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          slug: string;
+          owner_id: string;
+          logo_url?: string | null;
+        };
+        Update: {
+          name?: string;
+          slug?: string;
+          logo_url?: string | null;
+        };
+        Relationships: [];
+      };
+      inv_org_members: {
+        Row: {
+          id: string;
+          org_id: string;
+          user_id: string;
+          role: "owner" | "admin" | "member";
+          invited_by: string | null;
+          invited_at: string | null;
+          joined_at: string | null;
+          status: "active" | "pending" | "removed";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          user_id: string;
+          role?: "owner" | "admin" | "member";
+          invited_by?: string | null;
+          joined_at?: string | null;
+          status?: "active" | "pending" | "removed";
+        };
+        Update: {
+          role?: "owner" | "admin" | "member";
+          status?: "active" | "pending" | "removed";
+          joined_at?: string | null;
+        };
+        Relationships: [];
+      };
+      inv_invites: {
+        Row: {
+          id: string;
+          org_id: string;
+          email: string;
+          role: "admin" | "member";
+          invited_by: string;
+          token: string;
+          expires_at: string;
+          accepted_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          email: string;
+          role?: "admin" | "member";
+          invited_by: string;
+          token: string;
+          expires_at?: string;
+        };
+        Update: {
+          accepted_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       inv_adjust_stock: {
@@ -321,3 +399,6 @@ export type ProductVariant = Database["public"]["Tables"]["inv_product_variants"
 export type Stock = Database["public"]["Tables"]["inv_stock"]["Row"];
 export type Movement = Database["public"]["Tables"]["inv_movements"]["Row"];
 export type ApiKey = Database["public"]["Tables"]["inv_api_keys"]["Row"];
+export type Organization = Database["public"]["Tables"]["inv_organizations"]["Row"];
+export type OrgMember = Database["public"]["Tables"]["inv_org_members"]["Row"];
+export type Invite = Database["public"]["Tables"]["inv_invites"]["Row"];
