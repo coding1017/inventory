@@ -1,3 +1,20 @@
+> **🔀 This repo has moved + is now ARCHIVED.**
+>
+> As of June 6, 2026, `coding1017/inventory` was merged into the
+> [Webnari monorepo](https://github.com/coding1017/webnari) at the
+> `inventory/` path with full commit history preserved.
+>
+> **Active development happens there.** This repo is read-only.
+>
+> ```bash
+> git clone https://github.com/coding1017/webnari.git
+> cd webnari
+> pnpm install
+> pnpm --filter inventory dev
+> ```
+
+---
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
