@@ -367,6 +367,73 @@ export type Database = {
         };
         Relationships: [];
       };
+      inv_reservations: {
+        Row: {
+          id: string;
+          org_id: string;
+          product_id: string;
+          variant_id: string | null;
+          location_id: string;
+          quantity: number;
+          status: "active" | "committed" | "released" | "expired";
+          reference: string | null;
+          idempotency_key: string | null;
+          notes: string | null;
+          reserve_movement_id: string | null;
+          commit_unreserve_movement_id: string | null;
+          commit_sale_movement_id: string | null;
+          release_movement_id: string | null;
+          expires_at: string | null;
+          api_key_id: string | null;
+          performed_by: string | null;
+          created_at: string;
+          updated_at: string;
+          committed_at: string | null;
+          released_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          product_id: string;
+          variant_id?: string | null;
+          location_id: string;
+          quantity: number;
+          status?: "active" | "committed" | "released" | "expired";
+          reference?: string | null;
+          idempotency_key?: string | null;
+          notes?: string | null;
+          expires_at?: string | null;
+          api_key_id?: string | null;
+          performed_by?: string | null;
+        };
+        Update: {
+          status?: "active" | "committed" | "released" | "expired";
+          notes?: string | null;
+          reserve_movement_id?: string | null;
+          commit_unreserve_movement_id?: string | null;
+          commit_sale_movement_id?: string | null;
+          release_movement_id?: string | null;
+          committed_at?: string | null;
+          released_at?: string | null;
+        };
+        Relationships: [];
+      };
+      inv_api_key_usage: {
+        Row: {
+          key_id: string;
+          window_start: string;
+          count: number;
+        };
+        Insert: {
+          key_id: string;
+          window_start: string;
+          count?: number;
+        };
+        Update: {
+          count?: number;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       inv_adjust_stock: {
@@ -383,6 +450,50 @@ export type Database = {
           p_api_key_id?: string | null;
         };
         Returns: string;
+      };
+      inv_reserve_stock: {
+        Args: {
+          p_org_id: string;
+          p_product_id: string;
+          p_variant_id: string | null;
+          p_location_id: string;
+          p_quantity: number;
+          p_reference?: string | null;
+          p_idempotency_key?: string | null;
+          p_expires_at?: string | null;
+          p_notes?: string | null;
+          p_performed_by?: string | null;
+          p_api_key_id?: string | null;
+        };
+        Returns: string;
+      };
+      inv_commit_reservation: {
+        Args: {
+          p_reservation_id: string;
+          p_org_id: string;
+          p_reference?: string | null;
+          p_notes?: string | null;
+          p_performed_by?: string | null;
+          p_api_key_id?: string | null;
+        };
+        Returns: string;
+      };
+      inv_release_reservation: {
+        Args: {
+          p_reservation_id: string;
+          p_org_id: string;
+          p_notes?: string | null;
+          p_performed_by?: string | null;
+          p_api_key_id?: string | null;
+        };
+        Returns: string;
+      };
+      inv_check_rate_limit: {
+        Args: {
+          p_key_id: string;
+          p_limit: number;
+        };
+        Returns: boolean;
       };
     };
     Views: Record<string, never>;
@@ -402,3 +513,4 @@ export type ApiKey = Database["public"]["Tables"]["inv_api_keys"]["Row"];
 export type Organization = Database["public"]["Tables"]["inv_organizations"]["Row"];
 export type OrgMember = Database["public"]["Tables"]["inv_org_members"]["Row"];
 export type Invite = Database["public"]["Tables"]["inv_invites"]["Row"];
+export type Reservation = Database["public"]["Tables"]["inv_reservations"]["Row"];
