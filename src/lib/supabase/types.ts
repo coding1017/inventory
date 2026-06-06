@@ -434,6 +434,97 @@ export type Database = {
         };
         Relationships: [];
       };
+      inv_webhook_subscriptions: {
+        Row: {
+          id: string;
+          org_id: string;
+          name: string;
+          url: string;
+          secret: string;
+          events: string[];
+          is_active: boolean;
+          created_by: string | null;
+          last_delivered_at: string | null;
+          last_failure_at: string | null;
+          failure_streak: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          name: string;
+          url: string;
+          secret: string;
+          events?: string[];
+          is_active?: boolean;
+          created_by?: string | null;
+        };
+        Update: {
+          name?: string;
+          url?: string;
+          events?: string[];
+          is_active?: boolean;
+          last_delivered_at?: string | null;
+          last_failure_at?: string | null;
+          failure_streak?: number;
+        };
+        Relationships: [];
+      };
+      inv_webhook_events: {
+        Row: {
+          id: string;
+          org_id: string;
+          event: string;
+          payload: Record<string, unknown>;
+          source: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          event: string;
+          payload?: Record<string, unknown>;
+          source?: string | null;
+        };
+        Update: { [key: string]: never };
+        Relationships: [];
+      };
+      inv_webhook_deliveries: {
+        Row: {
+          id: string;
+          org_id: string;
+          event_id: string;
+          subscription_id: string;
+          attempt: number;
+          status: "pending" | "success" | "failed" | "exhausted";
+          response_code: number | null;
+          response_body: string | null;
+          duration_ms: number | null;
+          next_attempt_at: string;
+          delivered_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          event_id: string;
+          subscription_id: string;
+          attempt?: number;
+          status?: "pending" | "success" | "failed" | "exhausted";
+          next_attempt_at?: string;
+        };
+        Update: {
+          attempt?: number;
+          status?: "pending" | "success" | "failed" | "exhausted";
+          response_code?: number | null;
+          response_body?: string | null;
+          duration_ms?: number | null;
+          next_attempt_at?: string;
+          delivered_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
       inv_adjust_stock: {
@@ -494,6 +585,19 @@ export type Database = {
           p_limit: number;
         };
         Returns: boolean;
+      };
+      inv_publish_event: {
+        Args: {
+          p_org_id: string;
+          p_event: string;
+          p_payload: Record<string, unknown>;
+          p_source?: string | null;
+        };
+        Returns: string;
+      };
+      inv_webhook_backoff: {
+        Args: { p_attempt: number };
+        Returns: string; // interval — Postgres-side
       };
     };
     Views: Record<string, never>;

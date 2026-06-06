@@ -18,6 +18,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { apiResponse, apiError, corsHeaders } from "@/lib/api-key";
 import { verifyExternalCrmKey } from "@/lib/external-crm-auth";
 import type { Reservation } from "@/lib/external-crm-types";
+import { publishEvent, WEBHOOK_EVENTS } from "@/lib/webhook-publish";
 
 const bodySchema = z.object({
   notes: z.string().max(1000).nullable().optional(),
@@ -102,6 +103,17 @@ export async function POST(
       fetchError?.message ?? "Failed to read back reservation",
       500
     );
+  }
+
+  if (reservation.status === "released" && reservation.released_at) {
+    publishEvent(supabase, {
+      orgId: auth.orgId,
+      event: WEBHOOK_EVENTS.RESERVATION_RELEASED,
+      payload: {
+        ...(reservation as unknown as Record<string, unknown>),
+        release_notes: parsed.data.notes ?? null,
+      },
+    });
   }
 
   return apiResponse(reservation satisfies Reservation);

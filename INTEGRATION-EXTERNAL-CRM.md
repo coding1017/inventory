@@ -344,10 +344,135 @@ See [`examples/test-external-crm.sh`](examples/test-external-crm.sh) for an exec
 
 ## What this surface does NOT do (yet)
 
-- **No outbound webhooks.** A planned follow-up. For now consumers must poll.
 - **No automatic expiry of reservations.** Consumers must release their own.
 - **No partial commits.** A 5-unit reservation either fully commits or fully releases — no commit-3-release-2 split. Workaround: release the full reservation and create a fresh one for the smaller quantity.
 - **No batch reserve.** Each line item is a separate `POST /reservations` call. Network-cost-wise this is fine for typical 1–20-line-item quotes; if a consumer needs >50 reservations per quote, consider a batch follow-up.
+
+---
+
+## Outbound webhooks
+
+Inventory publishes events as signed HTTP POSTs to URLs you register, so consumers don't have to poll.
+
+### Subscribe
+
+```
+POST /api/v1/external-crm/webhooks/subscriptions
+Authorization: Bearer inv_...   (requires "webhooks_admin" permission)
+Content-Type: application/json
+
+{
+  "name":   "fieldcrm prod",
+  "url":    "https://api.fieldcrm.example/webhooks/inventory",
+  "events": ["reservation.committed", "stock.low_stock"]
+}
+```
+
+Empty `events` array = subscribe to all events.
+
+**Response 201** returns the full subscription row including a `secret` field starting with `whsec_`. **This is the only time the secret is returned in plaintext** — persist it immediately. Subsequent GETs / PATCHes never include it.
+
+### Manage
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET`    | `/webhooks/subscriptions`         | list (secret stripped) |
+| `POST`   | `/webhooks/subscriptions`         | create + mint secret |
+| `PATCH`  | `/webhooks/subscriptions/:id`     | update `name`/`url`/`events`/`is_active` |
+| `DELETE` | `/webhooks/subscriptions/:id`     | hard delete |
+
+### Event catalog (v1)
+
+| Event | Fired when | Payload `data` |
+|---|---|---|
+| `reservation.created`   | POST /reservations succeeds | Full `Reservation` row |
+| `reservation.committed` | POST /reservations/:id/commit succeeds AND status flipped to `committed` | `Reservation` row + `invoice_reference` |
+| `reservation.released`  | POST /reservations/:id/release succeeds AND status flipped to `released` | `Reservation` row + `release_notes` |
+| `stock.low_stock`       | inv_stock.quantity dropped through `low_stock_threshold` (above 0) | `{ product_id, variant_id, location_id, quantity, reserved, low_stock_threshold }` |
+| `stock.out_of_stock`    | inv_stock.quantity reached 0 from above | same shape as `low_stock` |
+
+Idempotent re-fires (e.g. committing an already-committed reservation) **do not** re-publish events.
+
+### Delivery envelope
+
+Each POST body has this shape:
+
+```json
+{
+  "id":           "evt_<event_uuid>",
+  "event":        "reservation.committed",
+  "org_id":       "<sender org uuid>",
+  "data":         { ...event-specific... },
+  "created_at":   "2026-06-06T16:59:21Z",
+  "delivered_at": "2026-06-06T17:00:01Z",
+  "attempt":      1
+}
+```
+
+### Verifying the signature
+
+Every request includes these headers:
+
+| Header | Value |
+|---|---|
+| `X-Webnari-Event`       | event name |
+| `X-Webnari-Delivery-Id` | UUID of this delivery attempt — use for dedup |
+| `X-Webnari-Signature`   | `hex(HMAC-SHA256(subscription.secret, raw_body))` |
+| `X-Webnari-Attempt`     | 1-based retry counter |
+
+**TypeScript verification recipe** (consumer-side):
+
+```ts
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+function verifyInventoryWebhook(
+  rawBody: string,
+  signatureHeader: string,
+  secret: string,
+): boolean {
+  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
+  // Both buffers must be same length for timingSafeEqual.
+  if (signatureHeader.length !== expected.length) return false;
+  return timingSafeEqual(
+    Buffer.from(signatureHeader, "utf8"),
+    Buffer.from(expected, "utf8"),
+  );
+}
+```
+
+Read the **raw body** before JSON parsing — even a re-serialized canonical body will produce a different signature.
+
+### Retry policy
+
+| Attempt | Backoff before this attempt |
+|---|---|
+| 1 | immediate |
+| 2 | +1 min |
+| 3 | +5 min |
+| 4 | +15 min |
+| 5 | +1 hour |
+| ≥6 | not retried — status flips to `exhausted` |
+
+Any 2xx response = success. Anything else (including network timeouts at 10s) = failure → schedule next attempt.
+
+### Operating the delivery worker
+
+The delivery side runs as a route handler that drains the queue:
+
+```
+POST /api/v1/external-crm/webhooks/deliver
+X-Cron-Secret: <env CRON_SECRET>
+```
+
+Schedule this every 60 seconds via your platform's cron (Vercel cron, Cloudflare Cron Trigger, etc.). The body is empty; the response summarizes work done (`{ claimed, success, failed, exhausted, skipped }`).
+
+A per-org variant authenticates with a Bearer key holding `webhooks_admin` instead of the cron secret, and only drains that org's queue. Use it for ops debugging.
+
+### What this DOESN'T guarantee
+
+- **No exactly-once delivery.** At-least-once. Deduplicate on `X-Webnari-Delivery-Id` if you write side-effects.
+- **No ordering across events.** Each delivery is independent. If you depend on order (e.g. `reservation.created` before `reservation.committed`), reconcile against the reservation's `status` field, not on event ordering.
+- **No automatic backfill.** Deliveries that exhaust their retry budget stay in `inv_webhook_deliveries` with `status='exhausted'` for inspection — they are not retried automatically.
 
 ---
 

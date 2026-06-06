@@ -19,6 +19,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { apiResponse, apiError, corsHeaders } from "@/lib/api-key";
 import { verifyExternalCrmKey } from "@/lib/external-crm-auth";
 import type { Reservation } from "@/lib/external-crm-types";
+import { publishEvent, WEBHOOK_EVENTS } from "@/lib/webhook-publish";
 
 const createSchema = z.object({
   product_id: z.string().uuid(),
@@ -116,6 +117,15 @@ export async function POST(request: NextRequest) {
       500
     );
   }
+
+  // Fire-and-forget webhook: notify any registered subscribers. The HTTP
+  // response is returned synchronously; delivery happens via the cron-driven
+  // worker that drains the deliveries table.
+  publishEvent(supabase, {
+    orgId: auth.orgId,
+    event: WEBHOOK_EVENTS.RESERVATION_CREATED,
+    payload: reservation as unknown as Record<string, unknown>,
+  });
 
   // The DB row matches the consumer-facing Reservation type 1:1.
   return apiResponse(reservation satisfies Reservation, null, 201);

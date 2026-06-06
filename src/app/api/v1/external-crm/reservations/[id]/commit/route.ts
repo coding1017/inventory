@@ -20,6 +20,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { apiResponse, apiError, corsHeaders } from "@/lib/api-key";
 import { verifyExternalCrmKey } from "@/lib/external-crm-auth";
 import type { Reservation } from "@/lib/external-crm-types";
+import { publishEvent, WEBHOOK_EVENTS } from "@/lib/webhook-publish";
 
 const bodySchema = z.object({
   reference: z.string().max(255).nullable().optional(),
@@ -113,6 +114,19 @@ export async function POST(
       fetchError?.message ?? "Failed to read back reservation",
       500
     );
+  }
+
+  // Only fire the webhook if the reservation actually transitioned (not on
+  // an idempotent re-commit of an already-committed row).
+  if (reservation.status === "committed" && reservation.committed_at) {
+    publishEvent(supabase, {
+      orgId: auth.orgId,
+      event: WEBHOOK_EVENTS.RESERVATION_COMMITTED,
+      payload: {
+        ...(reservation as unknown as Record<string, unknown>),
+        invoice_reference: parsed.data.reference ?? null,
+      },
+    });
   }
 
   return apiResponse(reservation satisfies Reservation);
