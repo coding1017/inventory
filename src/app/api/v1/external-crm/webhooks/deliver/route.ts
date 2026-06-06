@@ -38,23 +38,47 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: corsHeaders() });
 }
 
+/**
+ * GET wrapper for Vercel Cron, which only supports GET. Vercel auto-injects
+ * `Authorization: Bearer ${env.CRON_SECRET}` when a cron is configured in
+ * vercel.json. We accept that same header pattern here so the same endpoint
+ * works for Vercel Cron, manual curl, and the per-org Bearer flow.
+ */
+export async function GET(request: NextRequest) {
+  return drainQueue(request);
+}
+
 export async function POST(request: NextRequest) {
-  // Allow either Bearer auth OR a global cron secret.
-  const cronSecret = request.headers.get("x-cron-secret");
+  return drainQueue(request);
+}
+
+async function drainQueue(request: NextRequest): Promise<Response> {
+  // Three auth paths, tried in order:
+  //   1. X-Cron-Secret header  (manual / external cron)
+  //   2. Authorization: Bearer <CRON_SECRET>  (Vercel Cron auto-injects this)
+  //   3. Authorization: Bearer inv_...  (per-org admin key — only drains that org)
   const envCronSecret = process.env.CRON_SECRET;
+  const xCron = request.headers.get("x-cron-secret");
+  const auth = request.headers.get("authorization") ?? "";
+  const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7) : "";
+
   let orgFilter: string | null = null;
 
-  if (cronSecret && envCronSecret && cronSecret === envCronSecret) {
-    // Global cron run — drain across all orgs.
+  const isGlobalCron =
+    !!envCronSecret &&
+    ((xCron && xCron === envCronSecret) ||
+      (bearer && !bearer.startsWith("inv_") && bearer === envCronSecret));
+
+  if (isGlobalCron) {
     orgFilter = null;
   } else {
-    // Per-org Bearer run.
-    const auth = await verifyExternalCrmKey(request, {
+    // Per-org Bearer (inv_…) path
+    const keyAuth = await verifyExternalCrmKey(request, {
       required: "webhooks_admin",
       enforceOrgIdParam: false,
     });
-    if (auth instanceof Response) return auth;
-    orgFilter = auth.orgId;
+    if (keyAuth instanceof Response) return keyAuth;
+    orgFilter = keyAuth.orgId;
   }
 
   const supabase = createAdminClient();

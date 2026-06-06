@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/v1/external-crm/webhooks/deliver?via=vercel-cron",
+      "schedule": "* * * * *"
+    }
+  ]
+}

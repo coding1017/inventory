@@ -457,16 +457,65 @@ Any 2xx response = success. Anything else (including network timeouts at 10s) = 
 
 ### Operating the delivery worker
 
-The delivery side runs as a route handler that drains the queue:
+The delivery side runs as a route handler that drains the queue. Both `GET` and `POST` are accepted so it works with any cron platform:
 
 ```
-POST /api/v1/external-crm/webhooks/deliver
-X-Cron-Secret: <env CRON_SECRET>
+GET  /api/v1/external-crm/webhooks/deliver        (for Vercel Cron — GET-only)
+POST /api/v1/external-crm/webhooks/deliver        (for everything else)
 ```
 
-Schedule this every 60 seconds via your platform's cron (Vercel cron, Cloudflare Cron Trigger, etc.). The body is empty; the response summarizes work done (`{ claimed, success, failed, exhausted, skipped }`).
+Auth is tried in this order:
+1. `X-Cron-Secret: <env CRON_SECRET>` header — manual / external cron services
+2. `Authorization: Bearer <env CRON_SECRET>` — Vercel Cron's auto-injected pattern
+3. `Authorization: Bearer inv_…` with `webhooks_admin` permission — per-org drain (only that org's queue), useful for ops debugging
 
-A per-org variant authenticates with a Bearer key holding `webhooks_admin` instead of the cron secret, and only drains that org's queue. Use it for ops debugging.
+Schedule it every 60 seconds. The body is empty; the response summarizes work done: `{ claimed, success, failed, exhausted, skipped }`.
+
+#### Setup recipe: Vercel Cron (recommended)
+
+`vercel.json` (already shipped in this repo) wires it up:
+
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/v1/external-crm/webhooks/deliver?via=vercel-cron",
+      "schedule": "* * * * *"
+    }
+  ]
+}
+```
+
+Set `CRON_SECRET` in the Vercel project's env vars (any opaque secret — 32 hex chars is fine). Vercel auto-injects `Authorization: Bearer ${CRON_SECRET}` on each cron fire. **Vercel Hobby tier caps cron schedules at once per day** — minute-level granularity requires Pro.
+
+#### Setup recipe: Supabase pg_cron (works anywhere)
+
+If the inventory app isn't on Vercel or you want a second, redundant cron:
+
+1. Apply `supabase/005_webhook_cron_optional.sql` in the SQL editor. This:
+   - Enables `pg_cron` + `pg_net`
+   - Creates `inv_webhook_cron_config` (single-row table with the URL + cron secret)
+   - Schedules a 1-minute job that calls `inv_webhook_cron_tick()` which fires `pg_net.http_post` against the deliver endpoint
+2. Insert the config row:
+   ```sql
+   insert into inv_webhook_cron_config (url, cron_secret)
+   values ('https://your-inventory-domain/api/v1/external-crm/webhooks/deliver',
+           'whcron_<some-secret>');
+   ```
+3. The `cron_secret` value must match `CRON_SECRET` on the inventory deployment.
+4. Disable later via `select cron.unschedule('inv-webhook-deliver');`
+
+The `pg_cron` extension may need to be enabled from the Supabase Dashboard → Database → Extensions page before SQL access works.
+
+#### Setup recipe: external cron service (cron-job.org, etc.)
+
+Point any HTTP cron at:
+```
+POST https://your-inventory-domain/api/v1/external-crm/webhooks/deliver
+Header: X-Cron-Secret: <env CRON_SECRET>
+Schedule: every 1 minute
+```
 
 ### What this DOESN'T guarantee
 
